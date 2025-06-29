@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🧠 IP Tracker Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+      position: relative;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    /* Live clock top right */
+    #liveClock {
+      position: fixed;
+      top: 12px;
+      right: 20px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #357abd;
+      background: #e1e9f7;
+      padding: 6px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(53,122,189,0.3);
+      user-select: none;
+      z-index: 1000;
+      font-family: monospace;
+    }
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      box-sizing: border-box;
+    }
+    .info-row {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .info-box {
+      flex: 1 1 200px;
+      background: #357abd;
+      color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      min-width: 140px;
+      box-sizing: border-box;
+    }
+    .info-box .label {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+    .info-box .value {
+      font-size: 1.25rem;
+      font-weight: bold;
+      word-wrap: break-word;
+    }
+    form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    form input {
+      padding: 10px;
+      flex: 1 1 250px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    form button {
+      background: #357abd;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    #history {
+      margin-top: 20px;
+    }
+    #history input {
+      margin-bottom: 10px;
+      padding: 5px;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 1rem;
+    }
+    .history-list {
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 5px;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+    }
+    .history-list div {
+      padding: 5px 0;
+      border-bottom: 1px solid #ddd;
+      word-break: break-word;
+    }
+    .map {
+      height: 300px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 100%;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .controls button {
+      padding: 6px 12px;
+      border: none;
+      background: #1c3f5b;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    .chart-container {
+      background: #fff;
+      padding: 15px 20px;
+      border-radius: 8px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .chart-container h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      color: #357abd;
+      font-size: 1.2rem;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1024px) {
+      .info-box {
+        flex: 1 1 45%;
+      }
+      form input {
+        flex: 1 1 60%;
+      }
+      form button {
+        flex: 1 1 35%;
+      }
+    }
+    @media (max-width: 768px) {
+      .info-box {
+        flex: 1 1 100%;
+      }
+      .controls {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      form {
+        flex-direction: column;
+      }
+      form input, form button {
+        flex: 1 1 100%;
+        width: 100%;
+      }
+      .map {
+        height: 250px;
+      }
+    }
+    @media (max-width: 480px) {
+      body {
+        padding: 10px;
+      }
+      .container {
+        padding: 15px;
+      }
+      #liveClock {
+        font-size: 1rem;
+        padding: 4px 8px;
+        top: 8px;
+        right: 10px;
+      }
+      .map {
+        height: 200px;
+      }
+      .chart-container h3 {
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="liveClock">--:--:--</div>
+
+  <div class="container">
+    <form id="ipForm">
+      <input type="text" id="ipInput" placeholder="Enter IP or Domain" />
+      <button type="submit">Track IP</button>
+    </form>
+
+    <div class="controls">
+      <div>
+        <button id="toggleRefresh">⏸ Pause Auto-Refresh</button>
+      </div>
+      <div id="lastUpdated">Last Updated: —</div>
+    </div>
+
+    <div class="info-row">
+      <div class="info-box"><div class="label">IP Address</div><div class="value" id="ipVal">—</div></div>
+      <div class="info-box"><div class="label">Location</div><div class="value" id="locVal">—</div></div>
+      <div class="info-box"><div class="label">Organization</div><div class="value" id="orgVal">—</div></div>
+      <div class="info-box"><div class="label">Timezone</div><div class="value" id="tzVal">—</div></div>
+    </div>
+
+    <div id="map" class="map"></div>
+    <div id="map2" class="map2"></div>
+
+    <h3>📊 Revenue by Region</h3>
+    <canvas id="revenueChart"></canvas>
+
+    <div class="chart-container">
+      <h3>Expenses by Category</h3>
+      <canvas id="pieChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <h3>Expenses by Region</h3>
+      <canvas id="barChart"></canvas>
+    </div>
+
+    <div id="history">
+      <h3>📁 Search IP History</h3>
+      <input type="text" id="searchHistory" placeholder="Search previous IPs..." />
+      <div class="history-list" id="ipHistoryList"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    let autoRefresh = true;
+    let refreshInterval;
+    let map, marker;
+    let chart, pieChart, barChart;
+    let historyList = JSON.parse(localStorage.getItem('ipHistory')) || [];
+
+    // Live clock update
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('liveClock').textContent = `${h}:${m}:${s}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function updateIPHistory(ip) {
+      if (!historyList.includes(ip)) {
+        historyList.unshift(ip);
+        localStorage.setItem('ipHistory', JSON.stringify(historyList.slice(0, 100)));
+        renderHistory();
+      }
+    }
+
+    function renderHistory() {
+      const filter = document.getElementById("searchHistory").value.toLowerCase();
+      document.getElementById("ipHistoryList").innerHTML = historyList
+        .filter(ip => ip.toLowerCase().includes(filter))
+        .map(ip => `<div>${ip}</div>`).join('');
+    }
+
+    document.getElementById("searchHistory").addEventListener("input", renderHistory);
+
+    document.getElementById("toggleRefresh").addEventListener("click", () => {
+      autoRefresh = !autoRefresh;
+      document.getElementById("toggleRefresh").innerText = autoRefresh ? "⏸ Pause Auto-Refresh" : "▶ Resume Auto-Refresh";
+      clearInterval(refreshInterval);
+      if (autoRefresh) startAutoRefresh();
+    });
+
+    document.getElementById("ipForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const ip = document.getElementById("ipInput").value.trim();
+      if (ip) {
+        getIPInfo(ip);
+        updateIPHistory(ip);
+      }
+    });
+
+    function getIPInfo(ip = "") {
+      fetch(`https://ipwhois.app/json/${ip}`)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("ipVal").textContent = data.ip || ip;
+          document.getElementById("locVal").textContent = `${data.city}, ${data.region}, ${data.country}`;
+          document.getElementById("orgVal").textContent = data.org || "—";
+          document.getElementById("tzVal").textContent = data.timezone || "—";
+          document.getElementById("lastUpdated").textContent = "Last Updated: " + new Date().toLocaleTimeString();
+
+          if (data.latitude && data.longitude) {
+            marker.setLatLng([data.latitude, data.longitude]);
+            map.setView([data.latitude, data.longitude], 5);
+          }
+        })
+        .catch(() => alert("Failed to fetch IP data."));
+    }
+
+    function startMap() {
+      map = L.map('map').setView([20, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      marker = L.marker([20, 0]).addTo(map);
+    }
+
+    function loadRevenueData() {
+      fetch("https://raw.githubusercontent.com/openai/public-datasets/main/revenue-data.json")
+        .then(res => res.json())
+        .then(data => {
+          const labels = Object.keys(data);
+          const values = Object.values(data);
+
+          if (chart) chart.destroy();
+          chart = new Chart(document.getElementById("revenueChart"), {
+            type: "bar",
+            data: {
+              labels,
+              datasets: [{
+                label: "Revenue ($)",
+                data: values,
+                backgroundColor: "#4a90e2"
+              }]
+            },
+            options: {
+              responsive: true,
+              indexAxis: 'y',
+              plugins: { legend: { display: false } },
+              scales: { x: { beginAtZero: true } }
+            }
+          });
+        });
+    }
+
+    function loadExpensesCharts() {
+      // Expenses by Category Pie Chart
+      const pieData = {
+        labels: ["Travel", "Accommodation", "Food", "Misc"],
+        datasets: [{
+          data: [35, 28, 20, 17],
+          backgroundColor: ["#4a90e2", "#357abd", "#2f5f91", "#1c3f5b"]
+        }]
+      };
+      pieChart = new Chart(document.getElementById("pieChart"), {
+        type: "pie",
+        data: pieData,
+        options: {
+          responsive: true,
+          plugins: { legend: { position: "bottom" } }
+        }
+      });
+
+      // Expenses by Region Bar Chart
+      const barData = {
+        labels: ["NA", "EU", "AS", "SA", "AF", "AU"],
+        datasets: [{
+          label: "Expenses ($K)",
+          data: [1200, 1000, 850, 400, 120, 180],
+          backgroundColor: "#357abd",
+          borderRadius: 6
+        }]
+      };
+      barChart = new Chart(document.getElementById("barChart"), {
+        type: "bar",
+        data: barData,
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true } },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function startAutoRefresh() {
+      refreshInterval = setInterval(() => {
+        if (autoRefresh) loadRevenueData();
+      }, 10000);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      startMap();
+      renderHistory();
+      loadRevenueData();
+      loadExpensesCharts();
+      getIPInfo(); // current IP
+      startAutoRefresh();
+    });
+  </script>
+</body>
+</html>
